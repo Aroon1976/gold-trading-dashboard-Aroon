@@ -1,0 +1,66 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Gold Trading Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tabletop@1.5.4/tabletop.min.js"></script>
+</head>
+<body>
+    <h1>Gold Trading Dashboard</h1>
+    <div id="summary"></div>
+    <div id="chart-container" style="width:600px;">
+        <canvas id="profitChart"></canvas>
+    </div>
+    <div id="strategy"></div>
+    <div id="plan"></div>
+
+    <script>
+        const publicSpreadsheetUrl = 'https://docs.google.com/spreadsheets/d/1DlUKkDrAdqn1EGS4hzfL4fxWSlWkv0Rg';
+
+        function init() {
+            Tabletop.init({
+                key: publicSpreadsheetUrl,
+                callback: showData,
+                simpleSheet: false
+            });
+        }
+
+        function showData(data, tabletop) {
+            const summaryDiv = document.getElementById('summary');
+            const profitData = data["Dashboard Data"].elements.map(row => parseFloat(row.Profit)).filter(x => !isNaN(x));
+            const totalTrades = profitData.length;
+            const totalProfit = profitData.reduce((a,b) => a + b, 0);
+            const wins = profitData.filter(x => x > 0).length;
+            const winRate = totalTrades ? (wins/totalTrades*100).toFixed(2) : "0.00";
+
+            summaryDiv.innerHTML = `
+                <p>จำนวนการเทรดทั้งหมด: ${totalTrades}</p>
+                <p>กำไรรวม: $${totalProfit.toFixed(2)}</p>
+                <p>อัตราชนะ: ${winRate}%</p>
+            `;
+
+            const ctx = document.getElementById('profitChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data["Dashboard Data"].elements.map(row => row.Date),
+                    datasets: [{
+                        label: 'Profit',
+                        data: profitData
+                    }]
+                }
+            });
+
+            const strategyDiv = document.getElementById('strategy');
+            strategyDiv.innerHTML = "<h2>Daily Setup</h2><pre>" + JSON.stringify(data["Daily Setup"].elements, null, 2) + "</pre>";
+
+            const planDiv = document.getElementById('plan');
+            planDiv.innerHTML = "<h2>Trade Plan</h2><pre>" + JSON.stringify(data["Trade Plan"].elements, null, 2) + "</pre>";
+        }
+
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
