@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,83 +6,18 @@
     <title>Gold Trading Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tabletop@1.5.4/tabletop.min.js"></script>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        .container { display: flex; gap: 30px; }
-        .summary, .charts { flex: 1; }
-        .card { border: 1px solid #ccc; border-radius: 10px; padding: 15px; box-shadow: 2px 2px 10px rgba(0,0,0,0.1); margin-bottom: 30px; }
-        h2 { margin-top: 0; }
-        select { padding: 5px; margin-bottom: 10px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-        th { background-color: #f4f4f4; }
-    </style>
 </head>
 <body>
-    <h1>Gold Trading Performance Dashboard</h1>
-    <div class="container">
-        <div class="summary">
-            <div class="card">
-                <h2>สรุปผลการเทรด</h2>
-                <p><strong>จำนวนการเทรดทั้งหมด:</strong> <span id="total-trades">0</span></p>
-                <p><strong>กำไรรวม:</strong> $<span id="total-profit">0.00</span></p>
-                <p><strong>กำไรสะสม:</strong> $<span id="cumulative-profit">0.00</span></p>
-                <p><strong>อัตราชนะ:</strong> <span id="win-rate">0%</span></p>
-            </div>
-        </div>
-        <div class="charts">
-            <div class="card">
-                <h2>ผลกำไรรายวัน</h2>
-                <label for="dateFilter">เลือกวันที่:</label>
-                <select id="dateFilter"></select>
-                <canvas id="profitChart" width="400" height="200"></canvas>
-            </div>
-        </div>
+    <h1>Gold Trading Dashboard</h1>
+    <div id="summary"></div>
+    <div id="chart-container" style="width:600px;">
+        <canvas id="profitChart"></canvas>
     </div>
-
-    <div class="card">
-        <h2>กลยุทธ์รายวัน (Daily Setup)</h2>
-        <table id="strategyTable">
-            <thead>
-                <tr>
-                    <th>วันที่</th>
-                    <th>แนวโน้ม</th>
-                    <th>แนวรับ/แนวต้าน</th>
-                    <th>Setup</th>
-                    <th>จุดเข้า</th>
-                    <th>SL</th>
-                    <th>TP</th>
-                    <th>เหตุผล</th>
-                </tr>
-            </thead>
-            <tbody></tbody>
-        </table>
-    </div>
-
-    <div class="card">
-        <h2>แผนการเทรดรายวัน (Trade Plan)</h2>
-        <table id="planTable">
-            <thead>
-                <tr>
-                    <th>วันที่</th>
-                    <th>แนวโน้ม</th>
-                    <th>เหตุผลหลัก</th>
-                    <th>ข่าวสำคัญ</th>
-                    <th>Entry</th>
-                    <th>SL</th>
-                    <th>TP</th>
-                    <th>R:R</th>
-                    <th>Lot Size</th>
-                    <th>Risk ($)</th>
-                    <th>หมายเหตุ</th>
-                </tr>
-            </thead>
-            <tbody></tbody>
-        </table>
-    </div>
+    <div id="strategy"></div>
+    <div id="plan"></div>
 
     <script>
-        const publicSpreadsheetUrl = 'https://docs.google.com/spreadsheets/d/18iTgGYFnMYMIIimMyjTkKZ0EH2hPWb6STl7SVW6IxLM/edit?usp=sharing';
+        const publicSpreadsheetUrl = 'https://docs.google.com/spreadsheets/d/1DlUKkDrAdqn1EGS4hzfL4fxWSlWkv0Rg';
 
         function init() {
             Tabletop.init({
@@ -92,68 +28,36 @@
         }
 
         function showData(data, tabletop) {
-            const profitData = tabletop.sheets("Dashboard Data").elements.map(row => ({
-                date: row.Date,
-                profit: parseFloat(row.Profit)
-            })).filter(row => !isNaN(row.profit));
+            const summaryDiv = document.getElementById('summary');
+            const profitData = data["Dashboard Data"].elements.map(row => parseFloat(row.Profit)).filter(x => !isNaN(x));
+            const totalTrades = profitData.length;
+            const totalProfit = profitData.reduce((a,b) => a + b, 0);
+            const wins = profitData.filter(x => x > 0).length;
+            const winRate = totalTrades ? (wins/totalTrades*100).toFixed(2) : "0.00";
 
-            const strategyData = tabletop.sheets("Daily Setup").elements;
-            const planData = tabletop.sheets("Trade Plan").elements;
+            summaryDiv.innerHTML = `
+                <p>จำนวนการเทรดทั้งหมด: ${totalTrades}</p>
+                <p>กำไรรวม: $${totalProfit.toFixed(2)}</p>
+                <p>อัตราชนะ: ${winRate}%</p>
+            `;
 
-            const uniqueDates = [...new Set(profitData.map(t => t.date))];
-            const dateFilter = document.getElementById('dateFilter');
-            uniqueDates.forEach(date => {
-                const option = document.createElement('option');
-                option.value = date;
-                option.textContent = date;
-                dateFilter.appendChild(option);
-            });
-
-            dateFilter.addEventListener('change', () => {
-                renderChart(profitData.filter(t => t.date === dateFilter.value));
-            });
-
-            renderChart(profitData);
-
-            document.getElementById('total-trades').textContent = profitData.length;
-            document.getElementById('total-profit').textContent = profitData.reduce((sum, t) => sum + t.profit, 0).toFixed(2);
-            document.getElementById('cumulative-profit').textContent = profitData.reduce((sum, t) => sum + t.profit, 0).toFixed(2);
-            document.getElementById('win-rate').textContent = ((profitData.filter(t => t.profit > 0).length / profitData.length) * 100).toFixed(2) + '%';
-
-            const tbody = document.querySelector('#strategyTable tbody');
-            strategyData.forEach(row => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `<td>${row.Date || ''}</td><td>${row.Trend || ''}</td><td>${row.SupportResistance || ''}</td><td>${row.Setup || ''}</td><td>${row.Entry || ''}</td><td>${row.SL || ''}</td><td>${row.TP || ''}</td><td>${row.Reason || ''}</td>`;
-                tbody.appendChild(tr);
-            });
-
-            const planBody = document.querySelector('#planTable tbody');
-            planData.forEach(row => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `<td>${row.Date || ''}</td><td>${row.Trend || ''}</td><td>${row.Reason || ''}</td><td>${row.KeyNews || ''}</td><td>${row.Entry || ''}</td><td>${row.SL || ''}</td><td>${row.TP || ''}</td><td>${row['R:R'] || ''}</td><td>${row['Lot Size'] || ''}</td><td>${row['Risk ($)'] || ''}</td><td>${row.Note || ''}</td>`;
-                planBody.appendChild(tr);
-            });
-        }
-
-        function renderChart(data) {
             const ctx = document.getElementById('profitChart').getContext('2d');
-            if (window.myChart) window.myChart.destroy();
-            window.myChart = new Chart(ctx, {
+            new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: data.map(t => t.date),
+                    labels: data["Dashboard Data"].elements.map(row => row.Date),
                     datasets: [{
-                        label: 'Profit ($)',
-                        data: data.map(t => t.profit),
-                        backgroundColor: data.map(t => t.profit >= 0 ? 'green' : 'red')
+                        label: 'Profit',
+                        data: profitData
                     }]
-                },
-                options: {
-                    scales: {
-                        y: { beginAtZero: true }
-                    }
                 }
             });
+
+            const strategyDiv = document.getElementById('strategy');
+            strategyDiv.innerHTML = "<h2>Daily Setup</h2><pre>" + JSON.stringify(data["Daily Setup"].elements, null, 2) + "</pre>";
+
+            const planDiv = document.getElementById('plan');
+            planDiv.innerHTML = "<h2>Trade Plan</h2><pre>" + JSON.stringify(data["Trade Plan"].elements, null, 2) + "</pre>";
         }
 
         window.addEventListener('DOMContentLoaded', init);
